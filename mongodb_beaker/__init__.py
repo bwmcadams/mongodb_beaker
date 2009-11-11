@@ -268,7 +268,10 @@ class MongoDBNamespaceManager(NamespaceManager):
 
         result = self.mongo.find(spec={'_id': self.namespace},
                                  fields=[key], limit=-1)
-        if result:
+        if result > 0: 
+            """Running into instances in which mongo is returning
+            -1, which causes an error as __len__ should return 0 
+            or positive integers, hence the check of size explicit"""
             for item in result:
                 value = item.get(key, None)
                 if self._pickle:
