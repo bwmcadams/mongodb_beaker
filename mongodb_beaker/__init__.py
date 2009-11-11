@@ -209,9 +209,11 @@ def parse_mongo_url(mongo_url):
 class MongoDBNamespaceManager(NamespaceManager):
     clients = SyncDict()
     _pickle = True
+    _sparse = False
 
     def __init__(self, namespace, url=None, data_dir=None,
-                 lock_dir=None, skip_pickle=False, **params):
+                 lock_dir=None, skip_pickle=False, 
+                 sparse_collection=False, **params):
         NamespaceManager.__init__(self, namespace)
 
         if not url:
@@ -220,6 +222,10 @@ class MongoDBNamespaceManager(NamespaceManager):
         if skip_pickle:
             log.info("Disabling pickling for namespace: %s" % self.namespace)
             _pickle = False
+
+        if sparse_collection:
+            log.info("Separating data to one row per key (sparse collection) for ns %s ." % self.namespace)
+            self._sparse = True
 
         conn_params = parse_mongo_url(url)
         if conn_params['database'] and conn_params['host'] and \
@@ -258,16 +264,33 @@ class MongoDBNamespaceManager(NamespaceManager):
                     _create_mongo_conn)
 
     def get_creation_lock(self, key):
+        """@TODO - stop hitting filesystem for this...
+        """
         return file_synchronizer(
             identifier = "mongodb_container/funclock/%s" % self.namespace,
             lock_dir = self.lock_dir)
+
+    def do_remove(self):
+        "Clears the entire filesystem (drops the collection)"
+        log.debug("[MongoDB] Remove namespace: %s" % self.namespace)
+        if self._sparse:
+            import re
+            self.mongo.remove({'_id': re.compile('^%s#' % self.namespace)})
+        else:
+            self.mongo.remove({'_id': self.namespace})
+
+        #raise NotImplementedError()
 
     def __getitem__(self, key):
         log.debug("[MongoDB %s] Get Key: %s" % (self.mongo,
                                                 key))
 
-        result = self.mongo.find(spec={'_id': self.namespace},
-                                 fields=[key], limit=-1)
+        if self._sparse:
+            result = self.mongo.find(spec={'_id': '%s#%s' % (self.namespace, key)},
+                                     fields=['data'], limit=-1)
+        else:
+            result = self.mongo.find(spec={'_id': self.namespace},
+                                     fields=[key], limit=-1)
         if result > 0: 
             """Running into instances in which mongo is returning
             -1, which causes an error as __len__ should return 0 
@@ -284,11 +307,17 @@ class MongoDBNamespaceManager(NamespaceManager):
 
 
     def __contains__(self, key):
-        log.debug("[MongoDB %s] Contains Key? %s" % (self.mongo,
+        if self._sparse:
+            ns = '%s#%s' % (self.namespace, key) 
+        else: 
+            ns = self.namespace
+
+        log.debug("[MongoDB %s] Contains Key? %s" % (ns,
                                                      key))
-        result = self.mongo.find(spec={'_id': self.namespace},
-                                        fields=[key], limit=-1)
-        if result:
+        result = self.mongo.find_one({'_id': ns},
+                                    fields=[key])
+        log.debug("Result: %s" % result)
+        if result: 
             for item in result:
                 return item.get(key, None) is not None
         else:
@@ -298,25 +327,43 @@ class MongoDBNamespaceManager(NamespaceManager):
         return key in self
 
     def __setitem__(self, key, value):
-        log.debug("[MongoDB %s] Set Key: %s - %s" % (self.mongo,
-                                                     key, value))
+        log.debug("[MongoDB %s] Set Key: %s ... " % (self.mongo,
+                                                     key))
         if self._pickle:
             try:
                 value = pickle.dumps(value)
             except:
                 log.exception("Failed to pickle value.")
 
-        self.mongo.update({'_id': self.namespace}, {'$set': {key: value}},
-                          upsert=True)
+        if self._sparse:
+            self.mongo.insert({
+                '_id': "%s#%s" % (self.namespace, key),
+                'data': value
+            })
+        else:                 
+            self.mongo.update({'_id': self.namespace}, 
+                {'$set': {key: value}},
+                upsert=True
+            )
 
     def __delitem__(self, key):
         """Delete JUST the key, by setting it to None."""
-        #self.mongo.remove({'_id': self.namespace})
-        self[key] = None
+        if self._sparse:
+            self.mongo.remove({
+                '_id': "%s#%s" % (self.namespace, key)
+            })
+        else:
+            self.mongo.update({'_id': self.namespace}, 
+                {'$set': {key: None}},
+                upsert=False
+            )
 
     def keys(self):
-        keys = self.mongo.find_one({'_id': self.namespace})
-        keys.remove('_id')
+        if self._sparse:
+            keys = [row['_id'].replace(self.namespace + '#', '') for row in self.mongo.find()]
+        else:
+            keys = self.mongo.find_one({'_id': self.namespace})
+            keys.remove('_id')
         return keys
 
 
