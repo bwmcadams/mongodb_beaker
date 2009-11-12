@@ -319,7 +319,10 @@ class MongoDBNamespaceManager(NamespaceManager):
         log.debug("Result: %s" % result)
         if result: 
             for item in result:
-                return item.get(key, None) is not None
+                if isinstance(item, str) or isinstance(item, unicode):
+                    return item
+                else:
+                    return item.get(key, None) is not None
         else:
             return False
 
