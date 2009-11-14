@@ -286,45 +286,52 @@ class MongoDBNamespaceManager(NamespaceManager):
                                                 key))
 
         if self._sparse:
-            result = self.mongo.find(spec={'_id': '%s#%s' % (self.namespace, key)},
-                                     fields=['data'], limit=-1)
-        else:
-            result = self.mongo.find(spec={'_id': self.namespace},
-                                     fields=[key], limit=-1)
-        if result > 0: 
+            ns = '%s#%s' % (self.namespace, key) 
+            key = 'data'
+        else: 
+            ns = self.namespace
+
+        result = self.mongo.find_one({'_id': ns},
+                                     fields=[key])
+        if result: 
             """Running into instances in which mongo is returning
             -1, which causes an error as __len__ should return 0 
             or positive integers, hence the check of size explicit"""
-            for item in result:
-                value = item.get(key, None)
-                if self._pickle:
-                    try:
-                        value = pickle.loads(value.encode('utf-8'))
-                    except:
-                        log.exception("Failed to unpickle value.")
-                    
-                return value
+            value = result.get(key, None)
+                
+            if self._pickle and value:
+                try:
+                    value = pickle.loads(value.encode('utf-8'))
+                except:
+                    log.exception("Failed to unpickle value.")
+                
+            return value
 
 
     def __contains__(self, key):
         if self._sparse:
             ns = '%s#%s' % (self.namespace, key) 
+            key = 'data'
         else: 
             ns = self.namespace
 
-        log.debug("[MongoDB %s] Contains Key? %s" % (ns,
-                                                     key))
-        result = self.mongo.find_one({'_id': ns},
-                                    fields=[key])
-        log.debug("Result: %s" % result)
-        if result: 
-            for item in result:
-                if isinstance(item, str) or isinstance(item, unicode):
-                    return item
-                else:
-                    return item.get(key, None) is not None
-        else:
-            return False
+        def _has():
+            log.debug("[MongoDB %s] Contains Key? %s" % (ns,
+                                                         key))
+            result = self.mongo.find_one({'_id': ns},
+                                        fields=[key])
+            log.debug("Result is not None? ")
+            log.debug(result is not None)
+            if result: 
+                return result.get(key, None) is not None
+            else:
+                return False
+
+        ret = _has()
+
+        log.debug("Contains result: %s" % ret)
+
+        return ret
 
     def has_key(self, key):
         return key in self
