@@ -131,6 +131,7 @@ following session_configuration::
     >>> beaker.session.type = mongodb
     ... beaker.session.url = mongodb://localhost:27017/beaker#sessions
     ... beaker.session.skip_pickle = True
+    ... beaker.session.slave_okay = True
 
 Note the use of a 
 Depending on your individual needs, you may also wish to create a 
