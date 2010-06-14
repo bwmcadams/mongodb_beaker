@@ -226,7 +226,7 @@ class MongoDBNamespaceManager(NamespaceManager):
         if sparse_collection:
             log.info("Separating data to one row per key (sparse collection) for ns %s ." % self.namespace)
             self._sparse = True
-
+        
         conn_params = parse_mongo_url(url)
         if conn_params['database'] and conn_params['host'] and \
           conn_params['collection']:
@@ -236,6 +236,12 @@ class MongoDBNamespaceManager(NamespaceManager):
             raise MissingCacheParameter("Invalid Cache URL.  Cannot parse"
                                         " host, database and/or "
                                         " collection name.")
+        slave_okay = params.get('slave_okay')
+        if slave_okay == 'True':
+            conn_params['slave_okay'] = True
+        else:
+            conn_params['slave_okay'] = False
+        
         # Key will be db + collection
         if lock_dir:
             self.lock_dir = lock_dir
@@ -245,15 +251,14 @@ class MongoDBNamespaceManager(NamespaceManager):
             verify_directory(self.lock_dir)
 
         def _create_mongo_conn():
-            conn = pymongo.connection.Connection(conn_params['host'],
-                                                 conn_params['port'])
+            conn = pymongo.connection.Connection(conn_params['host'],\
+                        conn_params['port'], slave_okay=conn_params['slave_okay'])
 
             db = conn[conn_params['database']]
 
             if conn_params['username'] and conn_params['password']:
                 log.info("Attempting to authenticate %s/%s " %
-                         conn_params['username'],
-                         conn_params['password'])
+                         (conn_params['username'], conn_params['password']))
                 if not db.authenticate(conn_params['username'],
                                        conn_params['password']):
                     raise InvalidCacheBackendError('Cannot authenticate to '
