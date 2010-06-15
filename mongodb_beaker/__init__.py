@@ -237,11 +237,7 @@ class MongoDBNamespaceManager(NamespaceManager):
             raise MissingCacheParameter("Invalid Cache URL.  Cannot parse"
                                         " host, database and/or "
                                         " collection name.")
-        slave_okay = params.get('slave_okay')
-        if slave_okay == 'True':
-            conn_params['slave_okay'] = True
-        else:
-            conn_params['slave_okay'] = False
+        slave_okay = params.get('slave_okay') == 'True'
         
         # Key will be db + collection
         if lock_dir:
