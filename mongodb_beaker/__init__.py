@@ -341,9 +341,6 @@ class MongoDBNamespaceManager(NamespaceManager):
                 value['pickled'] = True
 
 
-        if expiretime:
-            # TODO - What is the datatype of this? it should be instantiated as a datetime instance
-            doc['valid_until'] = expiretime
 
         if self._sparse:
             _id = {
@@ -353,12 +350,18 @@ class MongoDBNamespaceManager(NamespaceManager):
 
             doc['data'] = value
             doc['_id'] = _id
+            if expiretime:
+                # TODO - What is the datatype of this? it should be instantiated as a datetime instance
+                doc['valid_until'] = expiretime
         else:
             _id = self.namespace
             doc['$set'] = {'data.' + key: value}
+            if expiretime:
+                # TODO - What is the datatype of this? it should be instantiated as a datetime instance
+                doc['$set']['valid_until'] = expiretime
 
         log.debug("Upserting Doc '%s' to _id '%s'" % (doc, _id))
-        self.mongo.update({"_id": _id}, doc, upsert=True, manipulate=True)
+        self.mongo.update({"_id": _id}, doc, upsert=True, safe=True)
 
     def __setitem__(self, key, value):
         self.set_value(key, value)

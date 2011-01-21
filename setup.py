@@ -6,16 +6,16 @@
 try:
     from setuptools import setup, find_packages
 except ImportError:
-    import ez_setup
-    ez_setup.use_setuptools()
+    from distribute_setup import use_setuptools
+    use_setuptools()
     from setuptools import setup, find_packages
 
 setup(
     name = 'mongodb_beaker',
-    version = '0.2',
+    version = '0.5',
     description = 'Beaker backend to write sessions and caches to a ' +\
     'MongoDB schemaless database.',
-    long_description = '\n' + open('README').read(),
+    long_description = '\n' + open('README.rst').read(),
     author='Brendan W. McAdams',
     author_email = 'bwmcadams@gmail.com',
     keywords = 'mongo mongodb beaker cache session',
@@ -42,6 +42,7 @@ setup(
     [beaker.backends]
     mongodb = mongodb_beaker:MongoDBNamespaceManager    
     """,
+    requires=['pymongo', 'beaker'],
     install_requires = [
         'pymongo>=1.9',
         'beaker>=1.5'

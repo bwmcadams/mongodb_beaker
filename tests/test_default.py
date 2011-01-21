@@ -86,7 +86,6 @@ def using_none_app(environ, start_response):
         value = cache.get_value('value')
     except:
         value = 10
-    print >> sys.stderr, "Value: %s" % value
     cache.set_value('value', None)
     start_response('200 OK', [('Content-type', 'text/plain')])
     return ['The current value is: %s' % value]
